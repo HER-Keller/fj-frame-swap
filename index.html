@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>FJ Frame Swap</title>
+  <meta name="theme-color" content="#1c5da6" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="FJ Swap" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" />
+  <link rel="stylesheet" href="styles.css?v=1" />
+</head>
+<body>
+  <header class="top">
+    <div class="top-row">
+      <h1 id="viewTitle">Checklist</h1>
+      <span class="pct mono" id="pct">0%</span>
+      <button id="syncBtn" class="sync" title="Sync status. Tap to sync now."><span class="dot"></span><span id="syncText">Local</span></button>
+    </div>
+    <div class="bar" aria-hidden="true"><i id="barfill"></i></div>
+  </header>
+
+  <main>
+    <!-- Checklist -->
+    <section id="v-checklist" data-view="checklist">
+      <div class="phase-chips" id="phaseChips" role="tablist" aria-label="Phase"></div>
+      <div id="phaseBody"></div>
+    </section>
+
+    <!-- Photos -->
+    <section id="v-photos" data-view="photos" hidden>
+      <p class="blurb">Every photo, filed by step. Tap one to see it full screen, swipe between them, add a caption, or ask Claude what it sees.</p>
+      <div class="bench-bar">
+        <select id="benchStep" aria-label="File new photos under"></select>
+        <div class="row-btns">
+          <label class="btn primary" style="flex:1"><span aria-hidden="true">📷</span> Take photo<input type="file" accept="image/*" capture="environment" class="file-in" id="benchCam"></label>
+          <label class="btn" style="flex:1">From library<input type="file" accept="image/*" multiple class="file-in" id="benchLib"></label>
+        </div>
+        <div class="err" id="benchErr" hidden></div>
+      </div>
+      <div class="filters" id="filters"></div>
+      <div class="gallery" id="gallery"></div>
+    </section>
+
+    <!-- Frame check -->
+    <section id="v-frame" data-view="frame" hidden>
+    <div class="sec-head"><h2>Frame check</h2><span class="n">BM · Body Dimension Drawings</span></div>
+    <p class="blurb">Check the new frame against Toyota's drawing before anything is bolted to it. Open these PDFs next to this page: <span class="mono">BM0240U@2007 › Vehicle Exterior › Body Dimension Drawings › Frame Dimension-Upper Face (Two-Dimensional Distance)</span> and the two <em>Three-Dimensional Distance</em> pages. The drawings show which points each dimension connects. The page for the lower face 2-D view didn't download (a broken link on TIS).</p>
+    <div class="grid2">
+      <div class="card"><h3>How Toyota measures</h3><ul>
+        <li>Use a tracking gauge (tram gauge) with no play in the body, plate or pointers. Use a tape only where a gauge won't reach, and keep it free of twists.</li>
+        <li>Left and right pointer heights must be equal. Calibrate before measuring and after changing pointer height. Seat the pointers in the holes.</li>
+        <li>3-D distance: straight line, center to center. 2-D distance: horizontal fore/aft, plus height from the imaginary standard line.</li>
+        <li>Imaginary standard line: 300 mm (11.81 in) below the frame's upper face at its center.</li>
+        <li>Where only one dimension is shown, left and right are the same.</li>
+      </ul></div>
+      <div class="card"><h3>Upper face points (legend)</h3>
+        <div class="tbl-wrap"><table class="spec"><thead><tr><th>Point</th><th>What it is</th><th>Hole</th></tr></thead><tbody>
+          <tr><td class="num">A, a</td><td>Body mounting hole</td><td class="num">ø26 mm</td></tr>
+          <tr><td class="num">B, b</td><td>Shock absorber installation hole</td><td class="num">ø12.15 mm</td></tr>
+          <tr><td class="num">C, c</td><td>Body mounting hole</td><td class="num">ø43 mm</td></tr>
+          <tr><td class="num">D, d</td><td>Side rail inner channel standard hole</td><td class="num">16×16 mm</td></tr>
+          <tr><td class="num">E, e</td><td>Side rail inner channel standard hole</td><td class="num">ø20 mm</td></tr>
+          <tr><td class="num">F, f</td><td>Body mounting hole</td><td class="num">ø43 mm</td></tr>
+          <tr><td class="num">G, g</td><td>Body mounting hole</td><td class="num">ø43 mm</td></tr>
+        </tbody></table></div>
+        <p class="note-sm" style="margin-top:6px">Capital letters are the right side, lower case the left.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h3>Height check (upper face)</h3>
+      <p class="note-sm" style="margin:6px 0 10px;max-width:75ch">The drawing prints a value under each point (A 371, B 608, C 232, D 300, E 300, F 259, G 371 mm). Going by Toyota's measuring method, these are heights above the imaginary standard line. <b>Confirm on the drawing before relying on them.</b> With the frame level on stands, measure from the floor to each hole and enter the numbers in mm. The page compares every point to the D standard hole on the same side, so the floor height itself cancels out.</p>
+      <div class="tbl-wrap"><table class="spec" id="heightTable"><thead><tr><th>Point</th><th>Drawing</th><th>RH floor-to-hole</th><th>RH off by</th><th>LH floor-to-hole</th><th>LH off by</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h3>Point-to-point log</h3>
+      <p class="note-sm" style="margin:6px 0 10px;max-width:75ch">Log the diagonals and lengths you read off the 3-D drawing, e.g. C to g (crossing X) and C to F (same side). Measure the old frame too before you strip it: it's the best match for how your body actually sat. Most frame shops take a second look at anything more than about 3 mm (1/8 in) off. That's a common rule of thumb, not a Toyota spec.</p>
+      <div class="tbl-wrap"><table class="spec" id="diagTable"><thead><tr><th>From</th><th>To</th><th>Drawing mm</th><th>Old frame</th><th>New frame</th><th>New vs drawing</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div style="margin-top:8px"><button type="button" id="addDiag">Add a measurement</button></div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h3>Lower face points (legend)</h3>
+      <div class="tbl-wrap"><table class="spec"><thead><tr><th>Point</th><th>What it is</th><th>Hole / nut</th></tr></thead><tbody>
+        <tr><td class="num">A, a</td><td>Bumper reinforcement installation nut</td><td class="num">M10</td></tr>
+        <tr><td class="num">B, b</td><td>Stabilizer bracket installation nut</td><td class="num">M10</td></tr>
+        <tr><td class="num">C, c</td><td>Suspension lower arm installation hole</td><td class="num">20×38 mm</td></tr>
+        <tr><td class="num">D, d</td><td>Suspension lower arm installation hole</td><td class="num">14.5×32.5 mm</td></tr>
+        <tr><td class="num">E, e / F, f / J, j</td><td>Side rail inner channel standard holes</td><td class="num">16×16 mm</td></tr>
+        <tr><td class="num">G, g</td><td>Lower control arm installation hole (rear)</td><td class="num">ø14.2 mm</td></tr>
+        <tr><td class="num">H, h</td><td>Upper control arm installation hole (rear)</td><td class="num">ø12.15 mm</td></tr>
+        <tr><td class="num">I</td><td>Lateral control rod installation hole</td><td class="num">ø15 mm</td></tr>
+        <tr><td class="num">K, k</td><td>Transport hook installation nut</td><td class="num">M12</td></tr>
+      </tbody></table></div>
+    </div>
+  
+    </section>
+
+    <!-- Torque book -->
+    <section id="v-specs" data-view="specs" hidden>
+      <p class="blurb">Every torque the swap touches, from the factory manuals. "Ride height" means snug it now, then do the final torque with the truck's weight on the suspension.</p>
+      <input type="search" id="specSearch" placeholder="Search: lateral rod, hub nut, 88…" aria-label="Search torque specs" enterkeyhint="search" />
+      <div id="specGroups"></div>
+    </section>
+
+    <!-- More -->
+    <section id="v-more" data-view="more" hidden>
+      <div class="card" style="display:grid;gap:12px">
+        <div>
+          <div class="lbl">My truck</div>
+          <div class="seg" role="group" aria-label="Transmission">
+            <button type="button" data-trans="both">Show both</button>
+            <button type="button" data-trans="at">Automatic</button>
+            <button type="button" data-trans="mt">Manual</button>
+          </div>
+        </div>
+        <button type="button" id="hideDone" aria-pressed="false" class="block">Hide finished steps</button>
+        <div class="row-btns">
+          <button type="button" id="syncNow" style="flex:1">Sync now</button>
+          <button type="button" id="shareBtn" style="flex:1">Share link…</button>
+          <button type="button" id="passBtn" style="flex:1">Passcode</button>
+        </div>
+        <p class="muted small" id="appVersion" style="margin:0"></p>
+      </div>
+      <div class="more-nav" style="margin-top:12px">
+        <button type="button" data-jump="organize">Keeping it organized <span aria-hidden="true">›</span></button>
+        <button type="button" data-jump="tools">Tool list <span aria-hidden="true">›</span></button>
+        <button type="button" data-jump="manuals">Where things are in your manuals <span aria-hidden="true">›</span></button>
+      </div>
+      <section class="sub" id="organize">
+    <div class="sec-head"><h2>Keeping it organized</h2><span class="n">system</span></div>
+    <p class="blurb">Every fastener, connector and line gets tied to a step code. Reassembly is then just working back through this page.</p>
+    <div class="grid2">
+      <div class="card"><h3>Step codes on everything</h3><p>One quart zip bag per step. Write the code, location and count on it: "P2-11 · rear LH cab mount · bolt, washer". Put the bag number in the step's <b>Bag #</b> field. The lock nuts go in the trash, since they're single-use.</p></div>
+      <div class="card"><h3>Two-sided connector flags</h3><p>Masking-tape flag on <em>both</em> halves with the same number: <span class="mono">E-07 ↔ E-07</span>. Prefixes: E electrical, B brake, F fuel/EVAP, C coolant, A A/C, V vacuum/breather, S steering.</p></div>
+      <div class="card"><h3>Color tape by system</h3><p><span class="tape" style="background:#2f6fd6"></span>Blue electrical · <span class="tape" style="background:#d43b2f"></span>Red brake and fuel · <span class="tape" style="background:#e6b400"></span>Yellow coolant and A/C · <span class="tape" style="background:#2e9b57"></span>Green vacuum and breathers · <span class="tape" style="background:#8a4fd1"></span>Purple steering.</p></div>
+      <div class="card"><h3>Matchmarks, not memory</h3><p>The manual says to matchmark the steering yoke and shafts, the propeller shaft flanges, the front camber and toe cams, and the brake discs to the hubs. Use a paint pen and photograph each one.</p></div>
+      <div class="card"><h3>Five bins, one shelf</h3><ul><li>Body and interior trim</li><li>Engine bay</li><li>Brakes, fuel and EVAP</li><li>Suspension and steering</li><li>Drivetrain and exhaust</li></ul></div>
+      <div class="card"><h3>New-parts bin</h3><p>Keep every single-use part the manual calls for in one labeled bin: cab mount lock nuts, ball joint nuts and clips, cotter pins, shock and stabilizer link nuts, brake hose clips, gaskets and O-rings. Nothing single-use goes back on.</p></div>
+      <div class="card"><h3>Photo routine</h3><ul><li>Before touching anything: a wide, a medium and a close shot with the tag visible.</li><li>After it's disconnected: one more close shot.</li><li>For routing, a slow video along the rail.</li><li>File the key shots under the step here so they're next to its checkbox.</li></ul></div>
+      <div class="card"><h3>Torque log</h3><p>When you torque something, write the value and date in that step's notes, e.g. "Cab mounts 45 N·m, 10/14". Then you know it's done, and what to retorque at 500 miles.</p></div>
+    </div>
+  
+      </section>
+      <section class="sub" id="tools">
+    <div class="sec-head"><h2>Tool list</h2><span class="n">shop</span></div>
+    <p class="blurb">Everything the steps call for. Toyota's special service tools (SST) are listed with the shop tool that does the same job.</p>
+    <div class="grid2">
+      <div class="card"><h3>Lifting and support</h3><ul><li>2-post lift with rubber pads and tall adapters, plus 2×6 blocks</li><li>Body dolly or 4 tall stands</li><li>Engine hoist with a load leveler. The manual's hangers are 12281-31070 and 12282-31050, with 90119-08177 bolts at 33 N·m.</li><li>Transmission jack</li><li>2 floor jacks, 6+ jack stands, chocks</li></ul></div>
+      <div class="card"><h3>Hand tools</h3><ul><li>Metric sockets 8–24 mm, deep and shallow</li><li>10 mm flare-nut wrench for brake unions (SST 09023-00101)</li><li>Flare-nut crowfoot for the PS feed and A/T cooler tubes (SST 09023-12701). The manual gives a separate torque for use with the SST.</li><li>6 mm hex key to hold stabilizer link studs</li><li>Torque wrenches: in·lb, 3/8″ ft·lb, 1/2″ to 250 ft·lb (hub nuts are 174 ft·lbf)</li><li>Snap ring pliers for the transfer shift lever</li><li>Pry bars, dead-blow, brass drift, punches</li></ul></div>
+      <div class="card"><h3>Specialty</h3><ul><li>Tie rod end puller (SST 09628-62011)</li><li>Front drive shaft puller (SST 09520-01010 set)</li><li>O2 sensor socket (SST 09224-00010)</li><li>Hose clamp pliers, trim tools, clip pliers</li><li>Tracking gauge (tram), or a tape and plumb bob</li><li>Brake pressure bleeder, clear hose, catch bottle</li><li>Spill-free coolant funnel</li><li>Thread chaser set</li><li>Induction heater or torch, cutoff wheel</li></ul></div>
+      <div class="card"><h3>Diagnostics</h3><ul><li><b>A Techstream-capable scan tool.</b> It's required for brake master cylinder solenoid bleeding if the reservoir runs empty or a line is opened at the booster. Also useful for the A/T fluid temperature check and VSC calibration.</li><li>DLC3 jumper wire (SST 09843-18040 equivalent) for the Ts–CG VSC calibration and the TC–CG A/T temperature mode</li><li>A/C recovery machine, vacuum pump and gauges, or an A/C shop</li></ul></div>
+      <div class="card"><h3>Fluids (from the manual)</h3><ul><li>Brake and clutch: DOT 3</li><li>Coolant: Toyota SLLC, 9.8 L A/T or 9.4 L M/T</li><li>ATF WS (A750F): 3.0 L drain and refill, 10.4 L dry</li><li>M/T: 75W-90 GL-4 or GL-5, 1.8 L</li><li>Transfer: VF2A 75W-90 GL-3, 1.0 L; VF4B 75W-90 GL-5, 1.4 L</li><li>Diffs: GL-5. Front 1.35–1.45 L (1.45–1.55 L with A.D.D., 75W-90). Rear 2.95–3.05 L (2.85–2.95 L with diff lock).</li><li>A/C: R-134a 570–630 g, ND-OIL8</li></ul></div>
+      <div class="card"><h3>Consumables</h3><ul><li>Penetrating oil, anti-seize, blue threadlocker, dielectric grease</li><li>Undercoat for the frame. Toyota specifies PASTAR UWE (V9240-0025) or PASTAR UC for chassis and underbody.</li><li>Cavity wax with a 360° wand for inside the rails</li><li>Plug and cap kit, zip bags, 5 tape colors, paint pens</li><li>Vinyl tape to seal open A/C ports (the manual says to)</li></ul></div>
+    </div>
+  
+      </section>
+      <section class="sub" id="manuals">
+    <div class="sec-head"><h2>Where things are in your manuals</h2><span class="n">Transcend drive</span></div>
+    <p class="blurb">All three manuals are in <span class="mono">Transcend › FJ Cruiser › fetch-toyota-service-manuals › manuals</span>. Open a folder's <span class="mono">index.html</span> to use the Manual Locator for "INFO" links.</p>
+    <div class="grid2">
+      <div class="card"><h3>Collision repair (BM0240U@2007)</h3><ul>
+        <li><b>Body Dimension Drawings</b>: frame upper and lower face, under body, engine compartment</li>
+        <li><b>Body Panel Replacement › Body Lower Back Panel (Cut)</b>: the only page with the cab mount torque (BP-35)</li>
+        <li><b>Protective Coatings</b>: undercoat and wax areas</li>
+        <li><b>General › Introduction</b>: jacking notes, structural steel map</li></ul></div>
+      <div class="card"><h3>Repair manual (RM0240U@2007)</h3><ul>
+        <li><b>General › SERVICE SPECIFICATIONS</b>: every torque table in one place</li>
+        <li><b>General › INTRODUCTION › REPAIR INSTRUCTION</b>: lift points (drawing), precautions</li>
+        <li><b>Engine-Hybrid System › 1GR-FE ENGINE MECHANICAL › ENGINE ASSEMBLY</b>: the full list of what disconnects</li>
+        <li><b>Suspension › SUSPENSION</b>: every arm, link and the alignment</li>
+        <li><b>Brake › BRAKE › BRAKE FLUID › BLEEDING</b>, and <b>BRAKE CONTROL › VEHICLE STABILITY CONTROL SYSTEM › CALIBRATION</b></li></ul></div>
+      <div class="card"><h3>Wiring diagrams (EM0240U)</h3><ul>
+        <li><b>routing</b>: where each harness runs on the truck. Use it to find body-to-chassis connectors.</li>
+        <li><b>system</b>: one diagram per circuit (ABS, fuel pump, diff lock)</li>
+        <li><b>overall</b>: whole-vehicle diagrams</li></ul></div>
+      <div class="card"><h3>Online references</h3><ul>
+        <li><a href="https://toyteclifts.com/pub/media/mageworx/downloads/attachment/file/0/5/05b1-k_1.pdf" target="_blank" rel="noopener">ToyTec body lift PDF</a>: photos of every cab mount access point</li>
+        <li><a href="https://www.toyotapartsdeal.com/parts-list/2007-toyota-fj_cruiser/body/frame.html" target="_blank" rel="noopener">OEM parts diagrams</a>: cushions, lock nuts, brake tubes, clips</li>
+        <li><a href="https://www.fjcruiserforums.com/threads/working-through-frame-swap-project.756525/" target="_blank" rel="noopener">Forum frame swap thread</a> · <a href="https://www.fjcruiserforums.com/threads/4wd-chassis-swap.754167/" target="_blank" rel="noopener">chassis swap</a></li></ul></div>
+    </div>
+  
+      </section>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <button type="button" data-tab="checklist" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/></svg>Checklist</button>
+    <button type="button" data-tab="photos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Photos</button>
+    <button type="button" data-tab="frame"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v18M17 3v18M7 8h10M7 16h10"/></svg>Frame</button>
+    <button type="button" data-tab="specs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>Torque</button>
+    <button type="button" data-tab="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
+  </nav>
+
+  <!-- Photo viewer -->
+  <div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo viewer">
+    <div class="v-top">
+      <button type="button" id="vClose" aria-label="Close">‹ Back</button>
+      <div class="t"><span class="code" id="vCode"></span> <span id="vTitle"></span></div>
+      <span class="muted small" id="vPos"></span>
+    </div>
+    <div class="v-scroll">
+      <div class="v-stage" id="vStage">
+        <img id="vImg" alt="">
+        <button type="button" class="v-nav prev" id="vPrev" aria-label="Previous photo">‹</button>
+        <button type="button" class="v-nav next" id="vNext" aria-label="Next photo">›</button>
+      </div>
+      <div class="v-side">
+        <label style="display:grid;gap:4px;font-size:12.5px;color:var(--muted)">Caption<input type="text" id="vCap" placeholder="What this shows, e.g. rear LH cab mount, cushion cracked" autocomplete="off"></label>
+        <label style="display:grid;gap:4px;font-size:12.5px;color:var(--muted)">Filed under<select id="vStep"></select></label>
+        <div class="muted small" id="vDate"></div>
+        <div id="vAskBox">
+          <div class="lbl">Ask Claude about this photo</div>
+          <textarea id="vQ" rows="2" placeholder="e.g. Is this cushion worth reusing? Which connector is this?"></textarea>
+          <div class="row-btns" style="margin-top:8px">
+            <button type="button" class="primary" id="vAsk">Ask</button>
+            <button type="button" data-q="What am I looking at here, and is there anything I should worry about before I continue this step?">What's this?</button>
+            <button type="button" data-q="Does anything in this photo look damaged, worn out, corroded past reuse, or unsafe?">Check condition</button>
+          </div>
+          <div class="answer" id="vAns" hidden></div>
+          <div class="err" id="vAskErr" hidden></div>
+        </div>
+        <p class="muted small" id="vAskOff" hidden>To ask Claude about photos, add an ANTHROPIC_API_KEY script property in the Google Sheet's Apps Script (see the README).</p>
+        <div id="vHist"></div>
+        <div class="row-btns">
+          <button type="button" id="vGoStep">Go to step</button>
+          <button type="button" class="danger" id="vDel">Delete photo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Passcode -->
+  <dialog id="passDlg" class="sheet">
+    <form id="passForm" method="dialog">
+      <h2 tabindex="-1">Passcode</h2>
+      <p class="muted small" style="margin:0">Enter the passcode set in the Google Sheet's script. You only need to do this once per device.</p>
+      <input name="pass" type="password" autocomplete="current-password" required aria-label="Passcode" />
+      <p id="passErr" class="err" hidden></p>
+      <button class="primary block">Unlock</button>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="config.js?v=1"></script>
+  <script src="data.js?v=1"></script>
+  <script src="app.js?v=1"></script>
+</body>
+</html>
