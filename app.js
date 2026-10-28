@@ -3,7 +3,7 @@
 
   /* ---------- Config & constants ---------- */
 
-  const APP_VERSION = '1';
+  const APP_VERSION = '2';
   const API = (window.FJ_CONFIG && window.FJ_CONFIG.apiUrl || '').trim();
   const REMOTE = !!API;
   const KEY = { cache: 'fj.cache', outbox: 'fj.outbox', pass: 'fj.pass', hide: 'fj.hide', phase: 'fj.phase', view: 'fj.view' };

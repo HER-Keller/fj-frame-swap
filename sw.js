@@ -1,7 +1,7 @@
 // Offline shell: the app opens with no signal in the shop. App files are network-first
 // (so updates land right away) with the cached copy as the fallback. Photo thumbnails and
 // fonts are cache-first since they never change.
-const CACHE = 'fj-swap-v1';
+const CACHE = 'fj-swap-v2';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'data.js', 'config.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
