@@ -3,7 +3,7 @@
 
   /* ---------- Config & constants ---------- */
 
-  const APP_VERSION = '2';
+  const APP_VERSION = '3';
   const API = (window.FJ_CONFIG && window.FJ_CONFIG.apiUrl || '').trim();
   const REMOTE = !!API;
   const KEY = { cache: 'fj.cache', outbox: 'fj.outbox', pass: 'fj.pass', hide: 'fj.hide', phase: 'fj.phase', view: 'fj.view' };
@@ -215,7 +215,7 @@
     const pct = vis.length ? Math.round(done / vis.length * 100) : 0;
     $('#pct').textContent = pct + '%';
     $('#barfill').style.width = pct + '%';
-    const chips = $('#phaseChips'); chips.textContent = '';
+    const chips = $('#phaseChips'), keepLeft = chips.scrollLeft; chips.textContent = '';
     PHASES.forEach((ph, pi) => {
       const list = vis.filter(s => s.phase === ph.id), d = list.filter(s => St(s.c).done).length;
       const b = document.createElement('button');
@@ -226,8 +226,15 @@
       b.onclick = () => { state.phase = ph.id; store.set(KEY.phase, ph.id); renderChecklist(); window.scrollTo(0, 0); };
       chips.appendChild(b);
     });
-    const cur = chips.querySelector('[aria-pressed="true"]'); if (cur) cur.scrollIntoView({ inline: 'center', block: 'nearest' });
+    // Scroll only the chip strip sideways, and only when the phase changes. (scrollIntoView
+    // here used to drag the whole page back to the top after every sync.)
+    const cur = chips.querySelector('[aria-pressed="true"]');
+    if (cur && chipsPhase !== state.phase) {
+      chips.scrollLeft += cur.getBoundingClientRect().left - chips.getBoundingClientRect().left - (chips.clientWidth - cur.offsetWidth) / 2;
+      chipsPhase = state.phase;
+    } else chips.scrollLeft = keepLeft;
   }
+  let chipsPhase = null;
 
   const openSteps = new Set();
   let renderedPhase = null, renderedTrans = null;
@@ -429,7 +436,9 @@
   function stepOptions() {
     return `<option value="general">General / unfiled</option>` + PHASES.map((ph, pi) => `<optgroup label="P${pi} · ${esc(ph.name)}">${ph.steps.filter(s => vOK(s.v)).map(s => `<option value="${s.c}">${s.code} ${esc(s.t)}</option>`).join('')}</optgroup>`).join('');
   }
-  function renderGallery() {
+  function renderGallery(keepScroll = true) {
+    const y = window.scrollY;
+    if (keepScroll) requestAnimationFrame(() => { if (Math.abs(window.scrollY - y) > 1 && state.view === 'photos') window.scrollTo(0, y); });
     const sel = $('#benchStep'), keep = sel.value;
     sel.innerHTML = stepOptions(); if (keep) sel.value = keep;
     const f = $('#filters'); f.textContent = '';
@@ -670,7 +679,7 @@
     $$('main > section[data-view]').forEach(s => { s.hidden = s.dataset.view !== view; });
     $$('nav.tabbar [data-tab]').forEach(b => { if (b.dataset.tab === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
     $('#viewTitle').textContent = TITLES[view];
-    if (view === 'photos') renderGallery();
+    if (view === 'photos') renderGallery(false);
     if (view === 'specs') renderSpecs();
     if (view === 'frame') { bindFrame(); renderHeights(); renderDiag(true); }
     window.scrollTo(0, 0);
@@ -678,11 +687,13 @@
   $$('nav.tabbar [data-tab]').forEach(b => b.onclick = () => go(b.dataset.tab));
 
   function renderAll() {
+    const y = window.scrollY; // a background sync redraws lists; keep the reader where they were
     applyTrans();
     renderChecklist();
     if (state.view === 'photos') renderGallery();
     if (state.view === 'specs') renderSpecs();
     if (state.view === 'frame') { renderHeights(); renderDiag(); }
+    if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
   }
 
   /* ---------- Self-update and offline shell ---------- */
