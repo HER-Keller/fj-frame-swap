@@ -3,7 +3,7 @@
 
   /* ---------- Config & constants ---------- */
 
-  const APP_VERSION = '3';
+  const APP_VERSION = '4';
   const API = (window.FJ_CONFIG && window.FJ_CONFIG.apiUrl || '').trim();
   const REMOTE = !!API;
   const KEY = { cache: 'fj.cache', outbox: 'fj.outbox', pass: 'fj.pass', hide: 'fj.hide', phase: 'fj.phase', view: 'fj.view' };
@@ -41,6 +41,7 @@
     frame: cached.frame || { h: {}, rows: [] },
     trans: cached.trans || 'both',
     askEnabled: !!cached.askEnabled,
+    guides: cached.guides || {},       // step code -> last uploaded (ISO), from the sheet's guide folder
     outbox: store.get(KEY.outbox, []),
     pass: store.get(KEY.pass, ''),
     phase: store.get(KEY.phase, 'p0'),
@@ -76,7 +77,7 @@
   }
 
   function persist() {
-    store.set(KEY.cache, { steps: state.steps, photos: state.photos.map(p => ({ ...p })), frame: state.frame, trans: state.trans, askEnabled: state.askEnabled });
+    store.set(KEY.cache, { steps: state.steps, photos: state.photos.map(p => ({ ...p })), frame: state.frame, trans: state.trans, askEnabled: state.askEnabled, guides: state.guides });
     store.set(KEY.outbox, state.outbox);
   }
 
@@ -173,6 +174,7 @@
       const trans = (data.settings || []).find(r => r.key === 'trans');
       if (trans && ['both', 'at', 'mt'].includes(trans.value)) state.trans = trans.value;
       state.askEnabled = !!data.askEnabled;
+      if (data.guides) state.guides = data.guides;
       persist();
       renderAll();
       setSync('ok', 'Synced');
@@ -300,6 +302,7 @@
     const body = li.querySelector('.sbody');
     const tag = s.list && s.d && /:$/.test(strip(s.d)) && s.list.length > 2 ? 'ol' : 'ul';
     body.innerHTML = `
+      <button type="button" class="primary block" data-guide><span aria-hidden="true">📘</span> Illustrated guide</button>
       ${s.d ? `<p>${s.d}</p>` : ''}
       ${s.list ? `<${tag} class="sub">${s.list.map(x => `<li>${esc(x)}</li>`).join('')}</${tag}>` : ''}
       ${s.after ? `<p>${s.after}</p>` : ''}
@@ -331,6 +334,8 @@
   }
 
   $('#phaseBody').addEventListener('click', e => {
+    const gb = e.target.closest('[data-guide]');
+    if (gb) { openGuide(gb.closest('li.step').dataset.c); return; }
     const t = e.target.closest('.toggle'); if (!t) return;
     const li = t.closest('li.step'), body = li.querySelector('.sbody');
     const open = t.getAttribute('aria-expanded') !== 'true';
@@ -578,6 +583,118 @@
   }
   $('#vAsk').onclick = () => ask($('#vQ').value);
   $$('#vAskBox [data-q]').forEach(b => b.onclick = () => { $('#vQ').value = b.dataset.q; ask(b.dataset.q); });
+
+  /* ---------- Illustrated guides ---------- */
+  // Built from the owner's Toyota manuals and stored in their Drive; fetched with the passcode and
+  // kept on the phone (IndexedDB) so they open offline in the shop.
+
+  const ORDER = ALL.map(s => s.c);
+  const G = { code: null };
+  const guideEl = $('#guide');
+
+  async function loadGuide(code, { network = true } = {}) {
+    const want = state.guides[code];
+    const hit = await idb.get('guide:' + code).catch(() => null);
+    if (hit && (!want || hit.updated === want)) return hit.g;
+    if (!REMOTE || !network || !want) return hit ? hit.g : null;
+    const r = await api({ action: 'guide_get', code });
+    const g = JSON.parse(r.guide);
+    await idb.put('guide:' + code, { updated: want, g }).catch(() => {});
+    return g;
+  }
+
+  function summaryHtml(s) {
+    const tag = s.list && s.d && /:$/.test(strip(s.d)) && s.list.length > 2 ? 'ol' : 'ul';
+    return `<div class="g-sum">
+      ${s.d ? `<p>${s.d}</p>` : ''}
+      ${s.list ? `<${tag} class="sub">${s.list.map(x => `<li>${esc(x)}</li>`).join('')}</${tag}>` : ''}
+      ${s.after ? `<p>${s.after}</p>` : ''}
+      ${s.warn ? `<div class="warn"><b>Caution.</b> ${s.warn}</div>` : ''}
+      ${s.specs && s.specs.length ? `<div><div class="lbl">Torque and specs</div>${specTable(s.specs)}</div>` : ''}
+      ${s.tools && s.tools.length ? `<div><div class="lbl">Tools</div><div class="chips">${s.tools.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div></div>` : ''}
+    </div>`;
+  }
+
+  function figHtml(g, id) {
+    const src = g.images && g.images[id];
+    return src ? `<button type="button" class="g-fig" data-zoom aria-label="Enlarge illustration"><img src="${src}" alt="Manual illustration"></button>` : '';
+  }
+
+  function sourceHtml(g, src) {
+    const parts = [`<section class="g-src"><div class="g-lab">${esc(src.label)}</div>`];
+    if (src.kind === 'components') {
+      parts.push('<div class="g-kind">Exploded view</div><div class="g-comp">' + src.blocks.map(b => b.t === 'fig' ? figHtml(g, b.img) : (b.figs || []).map(id => figHtml(g, id)).join('')).join('') + '</div>');
+    } else {
+      src.blocks.forEach(b => {
+        if (b.t === 'fig') { parts.push(figHtml(g, b.img)); return; }
+        const figs = (b.figs || []).map(id => figHtml(g, id)).join('');
+        const cls = { h: 'g-h', s: 'g-s', p: 'g-p', note: 'g-note', tq: 'g-tq' }[b.t] || 'g-p';
+        parts.push(`<div class="${cls}">${esc(b.text)}</div>${figs}`);
+      });
+    }
+    parts.push('</section>');
+    return parts.join('');
+  }
+
+  async function openGuide(code) {
+    const s = BY[code]; if (!s) return;
+    G.code = code;
+    if (guideEl.hidden) { guideEl.hidden = false; document.body.style.overflow = 'hidden'; history.pushState({ guide: 1 }, ''); }
+    $('#gCode').textContent = s.code; $('#gTitle').textContent = s.t;
+    const i = ORDER.indexOf(code);
+    $('#gPrev').disabled = i <= 0; $('#gNext').disabled = i >= ORDER.length - 1;
+    const body = $('#gBody'); body.scrollTop = 0;
+    body.innerHTML = `<div class="g-wrap">${summaryHtml(s)}<div id="gManual" class="g-manual"><p class="muted">Loading the manual pages…</p></div></div>`;
+    const box = $('#gManual');
+    const noPages = !(s.man || []).some(m => !/^EM/.test(m));
+    if (noPages) { box.innerHTML = '<p class="muted">This step has no pages in the factory manual, so there are no illustrations. Everything for it is above.</p>'; return; }
+    try {
+      const g = await loadGuide(code);
+      if (G.code !== code) return;
+      if (!g) {
+        box.innerHTML = REMOTE
+          ? '<p class="muted">The illustrations for this step aren’t uploaded yet. Run <b>Upload FJ Guides</b> on the Mac (Transcend › FJ Cruiser), then pull to refresh.</p>'
+          : '<p class="muted">Illustrated guides need the app connected to the Google Sheet.</p>';
+        return;
+      }
+      box.innerHTML = g.sources.length ? g.sources.map(src => sourceHtml(g, src)).join('') : '<p class="muted">No manual pages for this step.</p>';
+    } catch (e) {
+      if (G.code !== code) return;
+      box.innerHTML = `<p class="err">${e.network ? 'No connection, and this guide isn’t saved on the phone yet. Open it once with signal, or use “Save all guides offline” in More.' : 'Couldn’t load this guide: ' + esc(e.code || e.message)}</p>`;
+    }
+  }
+
+  function closeGuide(fromPop) {
+    guideEl.hidden = true; G.code = null; $('#gBody').textContent = '';
+    if (viewer.hidden) document.body.style.overflow = '';
+    if (!fromPop && history.state && history.state.guide) history.back();
+  }
+  $('#gClose').onclick = () => closeGuide();
+  $('#gPrev').onclick = () => { const i = ORDER.indexOf(G.code); if (i > 0) openGuide(ORDER[i - 1]); };
+  $('#gNext').onclick = () => { const i = ORDER.indexOf(G.code); if (i < ORDER.length - 1) openGuide(ORDER[i + 1]); };
+  $('#gBody').addEventListener('click', e => {
+    const z = e.target.closest('[data-zoom]'); if (!z) return;
+    $('#zImg').src = z.querySelector('img').src; $('#zImg').classList.remove('big'); $('#zoom').hidden = false;
+  });
+  $('#zClose').onclick = () => { $('#zoom').hidden = true; $('#zImg').removeAttribute('src'); };
+  $('#zImg').onclick = () => $('#zImg').classList.toggle('big');
+  window.addEventListener('popstate', () => { if (!guideEl.hidden) closeGuide(true); });
+
+  async function saveAllGuides() {
+    const btn = $('#saveGuides'), codes = Object.keys(state.guides).sort();
+    if (!REMOTE || !codes.length) { toast(REMOTE ? 'No guides uploaded yet' : 'Connect the app to the sheet first'); return; }
+    btn.disabled = true;
+    let done = 0, failed = 0;
+    for (const c of codes) {
+      btn.textContent = `Saving guides… ${done}/${codes.length}`;
+      try { await loadGuide(c); } catch { failed++; }
+      done++;
+    }
+    btn.disabled = false;
+    btn.textContent = 'Save all guides offline';
+    toast(failed ? `Saved ${done - failed} guides; ${failed} failed. Try again with better signal.` : `All ${done} guides saved on this phone`);
+  }
+  $('#saveGuides').onclick = saveAllGuides;
 
   /* ---------- Frame check ---------- */
 

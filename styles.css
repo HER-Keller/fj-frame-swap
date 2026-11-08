@@ -173,3 +173,34 @@ dialog.sheet form{display:grid;gap:12px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
 .toast button{min-height:30px;padding:2px 10px;background:none;color:inherit;border-color:currentColor}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* illustrated guide */
+.g-wrap{padding:14px 16px calc(40px + env(safe-area-inset-bottom,0px));display:grid;gap:16px;max-width:760px;margin:0 auto}
+.g-sum{display:grid;gap:10px}
+.g-sum p{margin:0}
+.g-sum ol.sub,.g-sum ul.sub{margin:0;padding-left:20px}
+.g-manual{display:grid;gap:18px}
+.g-src{border-top:3px solid var(--ink);padding-top:8px;display:grid;gap:8px;min-width:0}
+.g-lab{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);overflow-wrap:anywhere}
+.g-kind{font-family:var(--f-display);font-size:17px}
+.g-comp{display:grid;gap:8px}
+.g-h{font-family:var(--f-display);font-size:18px;margin-top:6px}
+.g-s{padding-left:10px}
+.g-p{padding-left:10px;color:var(--muted);font-size:14.5px}
+.g-note{background:var(--warn-bg);color:var(--warn-ink);border-left:4px solid var(--warn-line);padding:6px 10px;border-radius:0 6px 6px 0;font-size:14px}
+.g-tq{justify-self:start;font-family:var(--f-mono);font-size:13px;background:var(--ink);color:var(--bg);border-radius:4px;padding:2px 8px;margin-left:10px}
+.g-fig{all:unset;cursor:zoom-in;display:block;justify-self:start;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px;max-width:100%;margin-left:10px}
+.g-fig img{display:block;max-width:100%;width:min(420px,100%);height:auto}
+.g-comp .g-fig{margin-left:0}
+.g-comp .g-fig img{width:min(640px,100%)}
+#guide .v-top button{min-height:36px}
+#gPrev,#gNext{width:40px;padding:0;font-size:20px}
+.zoom{position:fixed;inset:0;z-index:90;background:#fff;overflow:auto;-webkit-overflow-scrolling:touch;padding:calc(56px + env(safe-area-inset-top,0px)) 8px 24px}
+.zoom img{display:block;width:100%;height:auto;cursor:zoom-in}
+.zoom img.big{width:250%;max-width:none;cursor:zoom-out}
+.zoom #zClose{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));right:12px;z-index:2;background:#15202b;color:#fff;border-color:#15202b}
+.zhint{color:#56636f;font-size:13px;text-align:center}
+/* keep wide manual drawings from widening the guide column */
+#guide{grid-template-columns:minmax(0,1fr)}
+.g-wrap,.g-manual,.g-src,.g-comp,.g-sum{grid-template-columns:minmax(0,1fr)}
+.g-sum .tbl-wrap{max-width:100%}

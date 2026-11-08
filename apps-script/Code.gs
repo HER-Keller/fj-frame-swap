@@ -43,7 +43,13 @@ function doPost(e) {
   try {
     switch (req.action) {
       case 'list':
-        return json_({ ok: true, steps: readAll_('Steps'), photos: readAll_('Photos').map(photoOut_), frame: readAll_('Frame'), settings: readAll_('Settings'), askEnabled: !!apiKey_() });
+        return json_({ ok: true, steps: readAll_('Steps'), photos: readAll_('Photos').map(photoOut_), frame: readAll_('Frame'), settings: readAll_('Settings'), askEnabled: !!apiKey_(), guides: listGuides_() });
+      case 'guide_list':
+        return json_({ ok: true, guides: listGuides_() });
+      case 'guide_get':
+        return json_({ ok: true, guide: getGuide_(req.code) });
+      case 'guide_put':
+        return json_({ ok: true, guide: withLock_(() => putGuide_(req.code, req.data)) });
       case 'step':
         return json_({ ok: true, step: withLock_(() => upsert_('Steps', 'code', stepIn_(req.step))) });
       case 'frame':
@@ -175,6 +181,51 @@ function photoOut_(p) {
   return { id: p.id, step: p.step, fileId: p.fileId, caption: p.caption, taken: p.taken, qa, public: String(p.public).toUpperCase() === 'TRUE', updated: p.updated };
 }
 
+/* ---------- Illustrated guides (Drive) ---------- */
+// One JSON file per checklist step, built from the owner's Toyota manuals and uploaded with
+// the "Upload FJ Guides" launcher. Kept in a private Drive folder, served only with the passcode.
+
+function guideFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('GUIDE_FOLDER_ID');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* recreate below */ } }
+  const f = DriveApp.createFolder('FJ Frame Swap Guides');
+  props.setProperty('GUIDE_FOLDER_ID', f.getId());
+  return f;
+}
+
+function guideCode_(code) {
+  const c = String(code || '');
+  if (!/^p\d-\d{2}$/.test(c)) throw new Error('bad_guide_code');
+  return c;
+}
+
+function listGuides_() {
+  const out = {};
+  const it = guideFolder_().getFiles();
+  while (it.hasNext()) {
+    const f = it.next(), m = f.getName().match(/^(p\d-\d{2})\.json$/);
+    if (m) out[m[1]] = f.getLastUpdated().toISOString();
+  }
+  return out;
+}
+
+function putGuide_(code, data) {
+  const c = guideCode_(code);
+  if (typeof data !== 'string' || data.charAt(0) !== '{') throw new Error('bad_guide_data');
+  const folder = guideFolder_(), name = c + '.json';
+  const it = folder.getFilesByName(name);
+  if (it.hasNext()) it.next().setContent(data);
+  else folder.createFile(name, data, 'application/json');
+  return { code: c, bytes: data.length };
+}
+
+function getGuide_(code) {
+  const it = guideFolder_().getFilesByName(guideCode_(code) + '.json');
+  if (!it.hasNext()) throw new Error('guide_not_found');
+  return it.next().getBlob().getDataAsString();
+}
+
 /* ---------- Ask Claude ---------- */
 
 function apiKey_() {
@@ -284,6 +335,7 @@ function setup() {
     sh.getRange(1, 1, sh.getMaxRows(), TABS[name].cols.length).setNumberFormat('@');
   });
   folder_();
+  guideFolder_();
 
   // Progress carried over from the earlier claude.ai checklist page.
   const steps = ss.getSheetByName('Steps');

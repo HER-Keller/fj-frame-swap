@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="styles.css?v=4" />
 </head>
 <body>
   <header class="top">
@@ -129,6 +129,7 @@
           <button type="button" id="shareBtn" style="flex:1">Share link…</button>
           <button type="button" id="passBtn" style="flex:1">Passcode</button>
         </div>
+        <button type="button" id="saveGuides" class="block">Save all guides offline</button>
         <p class="muted small" id="appVersion" style="margin:0"></p>
       </div>
       <div class="more-nav" style="margin-top:12px">
@@ -239,6 +240,22 @@
     </div>
   </div>
 
+  <!-- Illustrated step guide -->
+  <div class="viewer" id="guide" hidden role="dialog" aria-modal="true" aria-label="Illustrated guide">
+    <div class="v-top">
+      <button type="button" id="gClose" aria-label="Close guide">‹ Back</button>
+      <div class="t"><span class="code" id="gCode"></span> <span id="gTitle"></span></div>
+      <button type="button" id="gPrev" aria-label="Previous step">‹</button>
+      <button type="button" id="gNext" aria-label="Next step">›</button>
+    </div>
+    <div class="v-scroll" id="gBody"></div>
+  </div>
+  <div class="zoom" id="zoom" hidden role="dialog" aria-modal="true" aria-label="Illustration">
+    <button type="button" id="zClose">Close</button>
+    <img id="zImg" alt="Manual illustration, enlarged">
+    <p class="zhint">Tap the drawing to zoom in. Pinch works too.</p>
+  </div>
+
   <!-- Passcode -->
   <dialog id="passDlg" class="sheet">
     <form id="passForm" method="dialog">
@@ -252,8 +269,8 @@
 
   <div id="toast" class="toast" role="status"></div>
 
-  <script src="config.js?v=3"></script>
-  <script src="data.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="config.js?v=4"></script>
+  <script src="data.js?v=4"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
