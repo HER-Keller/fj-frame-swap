@@ -204,3 +204,10 @@ dialog.sheet form{display:grid;gap:12px}
 #guide{grid-template-columns:minmax(0,1fr)}
 .g-wrap,.g-manual,.g-src,.g-comp,.g-sum{grid-template-columns:minmax(0,1fr)}
 .g-sum .tbl-wrap{max-width:100%}
+.g-status{font-size:14.5px;color:var(--muted);background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.g-status:empty{display:none}
+.g-status.busy{color:var(--accent)}
+.g-status.warn{background:var(--warn-bg);color:var(--warn-ink);border-color:var(--warn-line)}
+.g-status.err{color:var(--danger);border-color:var(--danger)}
+.g-jump{width:100%;justify-content:space-between;background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.g-status:has(.g-jump){padding:0;border:0;background:none}

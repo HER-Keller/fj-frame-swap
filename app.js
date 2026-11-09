@@ -3,7 +3,7 @@
 
   /* ---------- Config & constants ---------- */
 
-  const APP_VERSION = '5';
+  const APP_VERSION = '6';
   const API = (window.FJ_CONFIG && window.FJ_CONFIG.apiUrl || '').trim();
   const REMOTE = !!API;
   const KEY = { cache: 'fj.cache', outbox: 'fj.outbox', pass: 'fj.pass', hide: 'fj.hide', phase: 'fj.phase', view: 'fj.view' };
@@ -592,11 +592,22 @@
   const G = { code: null };
   const guideEl = $('#guide');
 
-  async function loadGuide(code, { network = true } = {}) {
-    const want = state.guides[code];
+  async function refreshGuideList() {
+    const r = await api({ action: 'guide_list' });
+    state.guides = r.guides || {};
+    persist();
+    return state.guides;
+  }
+
+  async function loadGuide(code, { network = true, onFetch } = {}) {
+    let want = state.guides[code];
     const hit = await idb.get('guide:' + code).catch(() => null);
     if (hit && (!want || hit.updated === want)) return hit.g;
-    if (!REMOTE || !network || !want) return hit ? hit.g : null;
+    if (!REMOTE || !network) return hit ? hit.g : null;
+    // The full sync may not have run yet (or a stuck upload is holding it up): ask the sheet directly.
+    if (!want) { await refreshGuideList(); want = state.guides[code]; }
+    if (!want) return hit ? hit.g : null;
+    if (onFetch) onFetch();
     const r = await api({ action: 'guide_get', code });
     const g = JSON.parse(r.guide);
     await idb.put('guide:' + code, { updated: want, g }).catch(() => {});
@@ -644,23 +655,38 @@
     const i = ORDER.indexOf(code);
     $('#gPrev').disabled = i <= 0; $('#gNext').disabled = i >= ORDER.length - 1;
     const body = $('#gBody'); body.scrollTop = 0;
-    body.innerHTML = `<div class="g-wrap">${summaryHtml(s)}<div id="gManual" class="g-manual"><p class="muted">Loading the manual pages…</p></div></div>`;
-    const box = $('#gManual');
+    body.innerHTML = `<div class="g-wrap"><div id="gStatus" class="g-status"></div>${summaryHtml(s)}<div id="gManual" class="g-manual"></div></div>`;
+    const box = $('#gManual'), status = $('#gStatus');
+    const say = (html, cls = '') => { status.className = 'g-status ' + cls; status.innerHTML = html; };
     const noPages = !(s.man || []).some(m => !/^EM/.test(m));
-    if (noPages) { box.innerHTML = '<p class="muted">This step has no pages in the factory manual, so there are no illustrations. Everything for it is above.</p>'; return; }
+    if (noPages) { say('This step isn’t in the factory manual, so there are no illustrations. Everything for it is below.'); return; }
+    say('Checking for illustrations…', 'busy');
+    let t0 = 0, tick = null;
     try {
-      const g = await loadGuide(code);
+      const g = await loadGuide(code, { onFetch: () => {
+        t0 = Date.now();
+        say('Downloading the manual pages… (first time only)', 'busy');
+        tick = setInterval(() => { if (G.code === code) say(`Downloading the manual pages… ${Math.round((Date.now() - t0) / 1000)} s (first time only)`, 'busy'); }, 1000);
+      } });
+      clearInterval(tick);
       if (G.code !== code) return;
       if (!g) {
-        box.innerHTML = REMOTE
-          ? '<p class="muted">The illustrations for this step aren’t uploaded yet. Run <b>Upload FJ Guides</b> on the Mac (Transcend › FJ Cruiser), then pull to refresh.</p>'
-          : '<p class="muted">Illustrated guides need the app connected to the Google Sheet.</p>';
+        say(REMOTE
+          ? 'The illustrations for this step aren’t on the Google Sheet yet. Run <b>Upload FJ Guides</b> on the Mac (Transcend › FJ Cruiser), then open this again.'
+          : 'Illustrated guides need the app connected to the Google Sheet.', 'warn');
         return;
       }
-      box.innerHTML = g.sources.length ? g.sources.map(src => sourceHtml(g, src)).join('') : '<p class="muted">No manual pages for this step.</p>';
+      const n = Object.keys(g.images || {}).length;
+      box.innerHTML = g.sources.length ? g.sources.map(src => sourceHtml(g, src)).join('') : '';
+      say(g.sources.length ? `<button type="button" class="g-jump">📘 ${n} illustration${n === 1 ? '' : 's'} from the manual <span aria-hidden="true">↓</span></button>` : 'No manual pages for this step.');
+      const jump = status.querySelector('.g-jump');
+      if (jump) jump.onclick = () => box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
+      clearInterval(tick);
       if (G.code !== code) return;
-      box.innerHTML = `<p class="err">${e.network ? 'No connection, and this guide isn’t saved on the phone yet. Open it once with signal, or use “Save all guides offline” in More.' : 'Couldn’t load this guide: ' + esc(e.code || e.message)}</p>`;
+      say(e.network ? 'No connection, and this guide isn’t saved on the phone yet. Open it once with signal, or use “Save all guides offline” in More.'
+        : e.code === 'unknown_action' ? 'The Google Sheet script is an old version without guides. Check that config.js points at the newest deployment.'
+        : 'Couldn’t load this guide: ' + esc(e.code || e.message), 'err');
     }
   }
 
@@ -681,8 +707,12 @@
   window.addEventListener('popstate', () => { if (!guideEl.hidden) closeGuide(true); });
 
   async function saveAllGuides() {
-    const btn = $('#saveGuides'), codes = Object.keys(state.guides).sort();
-    if (!REMOTE || !codes.length) { toast(REMOTE ? 'No guides uploaded yet' : 'Connect the app to the sheet first'); return; }
+    const btn = $('#saveGuides');
+    if (!REMOTE) { toast('Connect the app to the sheet first'); return; }
+    btn.disabled = true; btn.textContent = 'Checking the sheet…';
+    try { await refreshGuideList(); } catch (e) { btn.disabled = false; btn.textContent = 'Save all guides offline'; toast(e.network ? 'No connection' : 'Couldn’t reach the sheet: ' + (e.code || e.message)); return; }
+    const codes = Object.keys(state.guides).sort();
+    if (!codes.length) { btn.disabled = false; btn.textContent = 'Save all guides offline'; toast('No guides on the sheet yet. Run Upload FJ Guides on the Mac.'); return; }
     btn.disabled = true;
     let done = 0, failed = 0;
     for (const c of codes) {
