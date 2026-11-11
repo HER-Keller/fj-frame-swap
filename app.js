@@ -3,7 +3,7 @@
 
   /* ---------- Config & constants ---------- */
 
-  const APP_VERSION = '6';
+  const APP_VERSION = '7';
   const API = (window.FJ_CONFIG && window.FJ_CONFIG.apiUrl || '').trim();
   const REMOTE = !!API;
   const KEY = { cache: 'fj.cache', outbox: 'fj.outbox', pass: 'fj.pass', hide: 'fj.hide', phase: 'fj.phase', view: 'fj.view' };
@@ -61,7 +61,8 @@
 
   const ALL = []; const BY = {};
   PHASES.forEach((ph, pi) => ph.steps.forEach((s, si) => {
-    s.c = `p${pi}-${String(si + 1).padStart(2, '0')}`; s.code = s.c.toUpperCase(); s.phase = ph.id; s.pi = pi;
+    // s.c is the permanent id (saved progress, notes, photos and guides use it); s.code is the shown position.
+    s.code = `P${pi}-${String(si + 1).padStart(2, '0')}`; s.c = s.id || s.code.toLowerCase(); s.phase = ph.id; s.pi = pi;
     ALL.push(s); BY[s.c] = s;
   }));
   BY.general = { c: 'general', code: 'GEN', t: 'General / unfiled', phase: 'general', specs: [] };
