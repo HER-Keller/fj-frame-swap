@@ -3,7 +3,7 @@
 
   /* ---------- Config & constants ---------- */
 
-  const APP_VERSION = '7';
+  const APP_VERSION = '8';
   const API = (window.FJ_CONFIG && window.FJ_CONFIG.apiUrl || '').trim();
   const REMOTE = !!API;
   const KEY = { cache: 'fj.cache', outbox: 'fj.outbox', pass: 'fj.pass', hide: 'fj.hide', phase: 'fj.phase', view: 'fj.view' };
@@ -42,6 +42,8 @@
     trans: cached.trans || 'both',
     askEnabled: !!cached.askEnabled,
     guides: cached.guides || {},       // step code -> last uploaded (ISO), from the sheet's guide folder
+    parts: cached.parts || [],          // {id, name, step, qty, status, partNo, price, link, photo, notes}
+    partsServer: !!cached.partsServer,  // false until the sheet script has the Parts tab
     outbox: store.get(KEY.outbox, []),
     pass: store.get(KEY.pass, ''),
     phase: store.get(KEY.phase, 'p0'),
@@ -78,7 +80,7 @@
   }
 
   function persist() {
-    store.set(KEY.cache, { steps: state.steps, photos: state.photos.map(p => ({ ...p })), frame: state.frame, trans: state.trans, askEnabled: state.askEnabled, guides: state.guides });
+    store.set(KEY.cache, { steps: state.steps, photos: state.photos.map(p => ({ ...p })), frame: state.frame, trans: state.trans, askEnabled: state.askEnabled, guides: state.guides, parts: state.parts, partsServer: state.partsServer });
     store.set(KEY.outbox, state.outbox);
   }
 
@@ -91,7 +93,10 @@
 
   /* ---------- Sync with Apps Script ---------- */
 
-  let flushing = false, retryTimer = null;
+  let flushing = false, retryTimer = null, inflight = null;
+  const partOp = o => o.action === 'part' || o.action === 'part_delete';
+  const sendable = o => !partOp(o) || state.partsServer;
+  const dropOp = o => { const i = state.outbox.indexOf(o); if (i >= 0) state.outbox.splice(i, 1); };
   function setSync(s, text) { $('#syncBtn').dataset.state = s; $('#syncText').textContent = text; }
 
   async function api(body) {
@@ -108,16 +113,21 @@
     return data;
   }
 
-  function handleSyncError(err, { duringList = false } = {}) {
+  function handleSyncError(err, { duringList = false, op = null } = {}) {
     if (err.code === 'bad_passcode' || err.code === 'passcode_not_set') {
       setSync('error', 'Locked');
       askPasscode(err.code === 'passcode_not_set' ? 'The sheet script still has the default passcode. Set PASSCODE in Code.gs and deploy a new version.' : 'That passcode didn’t work.');
       return;
     }
     if (err.code && duringList) { setSync('error', 'Sheet error'); toast('Couldn’t load from the sheet: ' + err.code); return; }
+    if (err.code === 'unknown_action' && op && partOp(op)) { // sheet script predates the parts list: keep parts on the phone
+      state.partsServer = false; persist();
+      toast('Parts are saved on this phone. Update the sheet script to sync them.');
+      return 'continue';
+    }
     if (err.code) { // the server rejected this one op; drop it so the queue can't jam
-      console.warn('Sync op rejected:', err.code, state.outbox[0]);
-      state.outbox.shift(); persist();
+      console.warn('Sync op rejected:', err.code, op);
+      dropOp(op); persist();
       toast('A change couldn’t be saved: ' + err.code);
       return 'continue';
     }
@@ -148,9 +158,12 @@
     flushing = true;
     setSync('busy', state.outbox.some(o => o.action === 'photo_add') ? 'Uploading…' : 'Saving…');
     try {
-      while (state.outbox.length) {
-        try { await sendOp(state.outbox[0]); state.outbox.shift(); persist(); renderPhotosEverywhere(); }
-        catch (err) { if (handleSyncError(err) !== 'continue') return; }
+      let op;
+      while ((op = state.outbox.find(sendable))) {
+        inflight = op;
+        try { await sendOp(op); dropOp(op); persist(); renderPhotosEverywhere(); }
+        catch (err) { if (handleSyncError(err, { op }) !== 'continue') return; }
+        finally { inflight = null; }
       }
     } finally { flushing = false; }
     refresh();
@@ -159,12 +172,12 @@
   async function refresh() {
     if (!REMOTE) return;
     if (!state.pass) { askPasscode(); return; }
-    if (state.outbox.length) { flush(); return; }
+    if (state.outbox.some(sendable)) { flush(); return; }
     const rev = state.rev;
     setSync('busy', 'Syncing…');
     try {
       const data = await api({ action: 'list' });
-      if (rev !== state.rev || state.outbox.length) return; // local edits mid-flight; next poll catches up
+      if (rev !== state.rev || state.outbox.some(sendable)) return; // local edits mid-flight; next poll catches up
       const steps = {};
       (data.steps || []).forEach(r => { steps[r.code] = { done: String(r.done).toUpperCase() === 'TRUE', notes: r.notes || '', bag: r.bag || '' }; });
       state.steps = steps;
@@ -176,9 +189,13 @@
       if (trans && ['both', 'at', 'mt'].includes(trans.value)) state.trans = trans.value;
       state.askEnabled = !!data.askEnabled;
       if (data.guides) state.guides = data.guides;
+      const held = state.outbox.length > 0; // only part ops wait here
+      state.partsServer = Array.isArray(data.parts);
+      if (state.partsServer && !held) state.parts = data.parts.map(normPart);
       persist();
       renderAll();
-      setSync('ok', 'Synced');
+      if (held && state.partsServer) { flush(); return; }
+      setSync('ok', held ? 'Synced · parts on phone' : 'Synced');
     } catch (err) { handleSyncError(err, { duringList: true }); }
   }
 
@@ -200,7 +217,7 @@
     state.steps[c] = { ...St(c), ...patch };
     const s = state.steps[c];
     // Collapse queued edits to the same step into one.
-    state.outbox = state.outbox.filter(o => !(o.action === 'step' && o.step.code === c && o !== state.outbox[0]));
+    state.outbox = state.outbox.filter(o => !(o.action === 'step' && o.step.code === c && o !== inflight));
     commit({ action: 'step', step: { code: c, done: !!s.done, notes: s.notes || '', bag: s.bag || '' } });
   }
 
@@ -268,7 +285,8 @@
 
   function stepMeta(c) {
     const n = photosFor(c).length, st = St(c);
-    return [n ? `${n} photo${n > 1 ? 's' : ''}` : '', st.bag ? `bag ${st.bag}` : '', st.notes ? 'notes' : ''].filter(Boolean).join(' · ');
+    const np = partsFor(c).filter(p => p.status !== 'have').length;
+    return [n ? `${n} photo${n > 1 ? 's' : ''}` : '', np ? `${np} part${np > 1 ? 's' : ''} to buy` : '', st.bag ? `bag ${st.bag}` : '', st.notes ? 'notes' : ''].filter(Boolean).join(' · ');
   }
 
   function updateStepRow(s) {
@@ -279,6 +297,7 @@
     li.querySelector('.meta').textContent = stepMeta(s.c);
     li.querySelectorAll('[data-f]').forEach(f => { if (document.activeElement !== f && !typeTimers[s.c]) f.value = st[f.dataset.f] || ''; });
     if (li.querySelector('[data-ph]')) renderStepPhotos(li);
+    renderStepParts(li);
   }
 
   function stepEl(s) {
@@ -316,8 +335,10 @@
         <label>Bag / tag #<input type="text" data-f="bag" value="${esc(st.bag)}" placeholder="${s.code}-A" autocomplete="off"></label>
         <label>Notes and torque log<textarea data-f="notes" rows="2" placeholder="What you found, torque applied, date">${esc(st.notes)}</textarea></label>
       </div>
-      <div><div class="lbl">Photos</div><div class="photos" data-ph></div><div class="err" data-err hidden></div></div>`;
+      <div><div class="lbl">Photos</div><div class="photos" data-ph></div><div class="err" data-err hidden></div></div>
+      <div><div class="lbl">Parts to buy</div><ul class="plist" data-parts></ul><button type="button" class="block" data-addpart>＋ Add a part for this step</button></div>`;
     renderStepPhotos(li);
+    renderStepParts(li);
   }
 
   function renderStepPhotos(li) {
@@ -337,6 +358,8 @@
   $('#phaseBody').addEventListener('click', e => {
     const gb = e.target.closest('[data-guide]');
     if (gb) { openGuide(gb.closest('li.step').dataset.c); return; }
+    const ap = e.target.closest('[data-addpart]');
+    if (ap) { openPart({ step: ap.closest('li.step').dataset.c }); return; }
     const t = e.target.closest('.toggle'); if (!t) return;
     const li = t.closest('li.step'), body = li.querySelector('.sbody');
     const open = t.getAttribute('aria-expanded') !== 'true';
@@ -469,6 +492,155 @@
   $('#benchCam').onchange = e => addPhotos($('#benchStep').value, e.target, $('#benchErr'));
   $('#benchLib').onchange = e => addPhotos($('#benchStep').value, e.target, $('#benchErr'));
 
+  /* ---------- Parts to buy ---------- */
+
+  const PST = { need: 'Need', ordered: 'Ordered', have: 'Have' };
+  const PNEXT = { need: 'ordered', ordered: 'have', have: 'need' };
+  const money = n => '$' + (Math.round(n * 100) / 100).toFixed(2).replace(/\.00$/, '');
+  function normPart(p) {
+    const price = p.price === '' || p.price == null || isNaN(Number(p.price)) ? '' : Number(p.price);
+    return { id: String(p.id), name: String(p.name || ''), step: String(p.step || '') || 'general', qty: Math.max(1, Math.round(Number(p.qty)) || 1), status: PST[p.status] ? p.status : 'need', partNo: String(p.partNo ?? ''), price, link: String(p.link || ''), photo: String(p.photo || ''), notes: String(p.notes || ''), updated: p.updated || '' };
+  }
+  function partsFor(c) { return state.parts.filter(p => p.step === c); }
+  const stepIdx = c => { const i = ALL.findIndex(s => s.c === c); return i < 0 ? 1e4 : i; };
+  const sortParts = list => list.sort((a, b) => stepIdx(a.step) - stepIdx(b.step) || a.name.localeCompare(b.name));
+
+  function savePart(p) {
+    p = normPart({ ...p, updated: nowIso() });
+    const i = state.parts.findIndex(x => x.id === p.id);
+    if (i >= 0) state.parts[i] = p; else state.parts.push(p);
+    state.outbox = state.outbox.filter(o => !(o.action === 'part' && o.part.id === p.id && o !== inflight));
+    commit({ action: 'part', part: p });
+    renderPartsEverywhere();
+  }
+  function deletePart(id) {
+    state.parts = state.parts.filter(p => p.id !== id);
+    state.outbox = state.outbox.filter(o => !(o.action === 'part' && o.part.id === id && o !== inflight));
+    commit({ action: 'part_delete', id });
+    renderPartsEverywhere();
+  }
+
+  function partRow(p, { showStep = true } = {}) {
+    const s = BY[p.step] || BY.general;
+    const meta = [showStep ? `<span class="code">${esc(s.code)}</span>` : '', p.partNo ? `<span class="mono">${esc(p.partNo)}</span>` : '', p.price !== '' ? money(p.price) + (p.qty > 1 ? ' ea' : '') : '', p.photo ? 'photo' : '', p.notes ? 'notes' : ''].filter(Boolean).join(' · ');
+    return `<li class="part" data-id="${esc(p.id)}">
+      <button type="button" class="pill s-${p.status}" data-cycle aria-label="${PST[p.status]}. Tap to mark ${PST[PNEXT[p.status]]}">${PST[p.status]}</button>
+      <button type="button" class="pbody" data-edit><span class="pname">${p.qty > 1 ? `<b class="mono">${p.qty}×</b> ` : ''}${esc(p.name)}</span>${meta ? `<span class="pmeta">${meta}</span>` : ''}</button>
+      ${p.link ? `<a class="plink" href="${esc(p.link)}" target="_blank" rel="noopener">Buy ↗</a>` : ''}
+    </li>`;
+  }
+
+  function renderStepParts(li) {
+    const ul = li.querySelector('[data-parts]'); if (!ul) return;
+    const order = { need: 0, ordered: 1, have: 2 };
+    ul.innerHTML = sortParts(partsFor(li.dataset.c)).sort((a, b) => order[a.status] - order[b.status]).map(p => partRow(p, { showStep: false })).join('');
+  }
+
+  let partFilter = 'open';
+  function renderParts() {
+    const n = { need: 0, ordered: 0, have: 0 }; let left = 0, unpriced = 0;
+    state.parts.forEach(p => { n[p.status]++; if (p.status !== 'have') { if (p.price !== '') left += p.price * p.qty; else unpriced++; } });
+    $('#partSum').innerHTML = `<div><b>${n.need}</b>Need</div><div><b>${n.ordered}</b>Ordered</div><div><b>${n.have}</b>Have</div><div><b>${money(left)}</b>Left to buy${unpriced ? `<i>${unpriced} not priced</i>` : ''}</div>`;
+    const f = $('#partFilters'); f.textContent = '';
+    [['open', 'To buy'], ['need', 'Need'], ['ordered', 'Ordered'], ['have', 'Have'], ['all', 'All']].forEach(([k, l]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = l; b.setAttribute('aria-pressed', partFilter === k);
+      b.onclick = () => { partFilter = k; renderParts(); }; f.appendChild(b);
+    });
+    const box = $('#partList');
+    if (!state.parts.length) {
+      const p5 = BY['p0-05'];
+      box.innerHTML = `<div class="empty">No parts on the list yet. Add one here, from inside any step, or from a photo of the rusted part.${p5 ? `<div style="margin-top:12px"><button type="button" id="partStarter">Add the single-use parts from ${esc(p5.code)}</button></div>` : ''}</div>`;
+      const st = $('#partStarter'); if (st) st.onclick = addStarterParts;
+      return;
+    }
+    const groups = partFilter === 'all' ? ['need', 'ordered', 'have'] : partFilter === 'open' ? ['need', 'ordered'] : [partFilter];
+    const html = groups.map(g => {
+      const list = sortParts(state.parts.filter(p => p.status === g));
+      return list.length ? `<h3 class="pgroup">${PST[g]} <span class="mono">${list.length}</span></h3><ul class="plist">${list.map(p => partRow(p)).join('')}</ul>` : '';
+    }).join('');
+    box.innerHTML = html || `<div class="empty">${partFilter === 'open' ? 'Everything on the list is in hand.' : 'Nothing here.'}</div>`;
+  }
+
+  function renderPartsBadge() {
+    const n = state.parts.filter(p => p.status === 'need').length, b = $('#partsBadge');
+    b.textContent = n; b.hidden = !n;
+  }
+  function renderPartsEverywhere() {
+    renderPartsBadge();
+    $$('#phaseBody li.step').forEach(li => { li.querySelector('.meta').textContent = stepMeta(li.dataset.c); renderStepParts(li); });
+    if (state.view === 'parts') renderParts();
+  }
+
+  function addStarterParts() {
+    const s = BY['p0-05']; if (!s) return;
+    (s.list || []).forEach(line => {
+      if (/^Fluids:/i.test(line)) return; // fluids are shopping, not parts; keep them in the step
+      if (state.trans === 'mt' && /\(A\/T\)/.test(line)) return;
+      const m = line.match(/^(\d+)\s+(.*)$/);
+      const name = (m ? m[2] : line).replace(/^./, ch => ch.toUpperCase());
+      savePart({ id: uid(), name, qty: m ? Number(m[1]) : 1, step: s.c, status: 'need' });
+    });
+    toast('Added the single-use parts');
+  }
+
+  // Add / edit sheet
+  const partDlg = $('#partDlg'), partForm = $('#partForm');
+  let editing = null;
+  function openPart(p) {
+    editing = p && p.id ? state.parts.find(x => x.id === p.id) || null : null;
+    const v = editing || normPart({ id: '', status: 'need', qty: 1, ...p });
+    $('#partH').textContent = editing ? 'Edit part' : 'Add a part';
+    partForm.step.innerHTML = stepOptions(); partForm.step.value = BY[v.step] ? v.step : 'general';
+    ['name', 'partNo', 'link', 'notes'].forEach(k => { partForm[k].value = v[k] || ''; });
+    partForm.qty.value = v.qty || 1; partForm.price.value = v.price === '' ? '' : v.price;
+    partForm.dataset.status = v.status; partForm.dataset.photo = v.photo || '';
+    $$('#partStatus button').forEach(b => b.setAttribute('aria-pressed', b.dataset.st === v.status));
+    const ph = state.photos.find(x => x.id === v.photo), box = $('#partPhoto');
+    box.hidden = !ph; if (ph) { const img = box.querySelector('img'); img.removeAttribute('src'); setImg(img, ph, 240); }
+    const del = $('#partDel'); del.hidden = !editing; del.classList.remove('confirm'); del.textContent = 'Delete';
+    $('#partErr').hidden = true;
+    partDlg.showModal();
+    if (!editing && !v.name) partForm.name.focus();
+  }
+  $$('#partStatus button').forEach(b => b.onclick = () => { partForm.dataset.status = b.dataset.st; $$('#partStatus button').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  partForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const name = partForm.name.value.trim();
+    if (!name) { $('#partErr').textContent = 'Give the part a name.'; $('#partErr').hidden = false; partForm.name.focus(); return; }
+    let link = partForm.link.value.trim();
+    if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
+    savePart({ id: editing ? editing.id : uid(), name, qty: partForm.qty.value, status: partForm.dataset.status, step: partForm.step.value, partNo: partForm.partNo.value.trim(), price: partForm.price.value === '' ? '' : partForm.price.value, link, photo: partForm.dataset.photo, notes: partForm.notes.value });
+    partDlg.close();
+    toast(editing ? 'Part saved' : 'Added to the parts list');
+  });
+  $('#partCancel').onclick = () => partDlg.close();
+  $('#partDel').onclick = () => {
+    const b = $('#partDel'); if (!editing) return;
+    if (!b.classList.contains('confirm')) { b.classList.add('confirm'); b.textContent = 'Tap again to delete'; return; }
+    deletePart(editing.id); partDlg.close(); toast('Part removed');
+  };
+  $('#partAdd').onclick = () => openPart({});
+
+  // Rows anywhere (Parts tab or inside a step): tap the pill to move it along, the row to edit.
+  document.addEventListener('click', e => {
+    const row = e.target.closest('li.part'); if (!row) return;
+    const p = state.parts.find(x => x.id === row.dataset.id); if (!p) return;
+    if (e.target.closest('[data-cycle]')) { savePart({ ...p, status: PNEXT[p.status] }); toast(`${p.name}: ${PST[PNEXT[p.status]]}`); }
+    else if (e.target.closest('[data-edit]')) openPart(p);
+  });
+
+  $('#partCopy').onclick = async () => {
+    const open = state.parts.filter(p => p.status !== 'have');
+    if (!open.length) { toast('Nothing left to buy'); return; }
+    const line = p => `- ${p.qty > 1 ? p.qty + '× ' : ''}${p.name}${p.partNo ? ' · #' + p.partNo : ''}${p.price !== '' ? ' · ' + money(p.price) + (p.qty > 1 ? ' ea' : '') : ''} (${(BY[p.step] || BY.general).code})${p.link ? '\n  ' + p.link : ''}`;
+    let left = 0; open.forEach(p => { if (p.price !== '') left += p.price * p.qty; });
+    const text = ['FJ frame swap: parts to buy', ...['need', 'ordered'].flatMap(g => { const l = sortParts(open.filter(p => p.status === g)); return l.length ? ['', PST[g] + ':', ...l.map(line)] : []; }), '', 'Left to buy: ' + money(left)].join('\n');
+    try {
+      if (navigator.share) await navigator.share({ title: 'FJ parts to buy', text });
+      else { await navigator.clipboard.writeText(text); toast('Shopping list copied'); }
+    } catch { /* share sheet dismissed */ }
+  };
+
   /* ---------- Viewer ---------- */
 
   const V = { ids: [], i: 0, busy: false };
@@ -529,6 +701,7 @@
     const li = document.getElementById(s.c);
     if (li) { li.querySelector('.toggle').click(); li.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
   };
+  $('#vPart').onclick = () => { const p = cur(); if (p) openPart({ step: p.step, photo: p.id, name: p.caption || '' }); };
   $('#vDel').onclick = () => {
     const b = $('#vDel'), p = cur(); if (!p) return;
     if (!b.classList.contains('confirm')) { b.classList.add('confirm'); b.textContent = 'Tap again to delete'; setTimeout(() => { b.classList.remove('confirm'); b.textContent = 'Delete photo'; }, 4000); return; }
@@ -821,24 +994,29 @@
 
   /* ---------- Views ---------- */
 
-  const TITLES = { checklist: 'Checklist', photos: 'Photos', frame: 'Frame check', specs: 'Torque book', more: 'More' };
+  const TITLES = { checklist: 'Checklist', photos: 'Photos', parts: 'Parts to buy', frame: 'Frame check', specs: 'Torque book', more: 'More' };
   function go(view) {
     state.view = view;
     $$('main > section[data-view]').forEach(s => { s.hidden = s.dataset.view !== view; });
-    $$('nav.tabbar [data-tab]').forEach(b => { if (b.dataset.tab === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+    const tab = view === 'frame' ? 'more' : view; // Frame check opens from More
+    $$('nav.tabbar [data-tab]').forEach(b => { if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
     $('#viewTitle').textContent = TITLES[view];
     if (view === 'photos') renderGallery(false);
+    if (view === 'parts') renderParts();
     if (view === 'specs') renderSpecs();
     if (view === 'frame') { bindFrame(); renderHeights(); renderDiag(true); }
     window.scrollTo(0, 0);
   }
   $$('nav.tabbar [data-tab]').forEach(b => b.onclick = () => go(b.dataset.tab));
+  $$('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
 
   function renderAll() {
     const y = window.scrollY; // a background sync redraws lists; keep the reader where they were
     applyTrans();
     renderChecklist();
     if (state.view === 'photos') renderGallery();
+    if (state.view === 'parts') renderParts();
+    renderPartsBadge();
     if (state.view === 'specs') renderSpecs();
     if (state.view === 'frame') { renderHeights(); renderDiag(); }
     if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);

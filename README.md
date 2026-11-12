@@ -1,10 +1,11 @@
 # FJ Frame Swap
 
-A phone app for the body-off frame swap on a 2007 FJ Cruiser. It covers the checklist, photos, the frame check and a torque book, with every spec taken from the Toyota factory manuals (RM0240U repair, BM0240U collision). Progress and photos sync through a Google Sheet and a Drive folder.
+A phone app for the body-off frame swap on a 2007 FJ Cruiser. It covers the checklist, photos, a parts-to-buy list, the frame check and a torque book, with every spec taken from the Toyota factory manuals (RM0240U repair, BM0240U collision). Progress and photos sync through a Google Sheet and a Drive folder.
 
-- **Checklist:** 94 steps in 8 phases. Each step has its torque table, tools, cautions, the manual folder path on the Transcend drive, a bag number, notes and photos.
+- **Checklist:** 72 steps in 8 phases, cut to what the swap needs. Each step has its torque table, tools, cautions, the manual folder path on the Transcend drive, a bag number, notes and photos.
 - **Photos:** you can take a photo straight from any step, or browse them all on the Photos tab. The viewer has swipe, captions and moving a photo to another step. **Ask Claude** answers questions about a photo, using that step's instructions and specs as context.
-- **Frame check:** a height check against Toyota's frame drawing, plus a point-to-point diagonal log.
+- **Parts:** a list of what to buy (rusted or single-use parts), added from the Parts tab, from inside a step, or from a photo. Each part moves from Need to Ordered to Have, and you can share the list as text. It's stored on the sheet's Parts tab.
+- **Frame check** (under More): a height check against Toyota's frame drawing, plus a point-to-point diagonal log.
 - **Torque book:** all the specs in one place, with search.
 - **Offline:** the app opens with no signal. Checkmarks, notes and photos are saved on the phone and sync when the connection comes back.
 

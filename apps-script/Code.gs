@@ -29,6 +29,7 @@ const TABS = {
   Photos: { cols: ['id', 'step', 'fileId', 'caption', 'taken', 'qa', 'public', 'updated'], headers: ['ID', 'Step', 'Drive file', 'Caption', 'Taken', 'Claude Q&A (JSON)', 'Link shared', 'Updated'] },
   Frame: { cols: ['key', 'value', 'updated'], headers: ['Key', 'Value (JSON)', 'Updated'] },
   Settings: { cols: ['key', 'value', 'updated'], headers: ['Key', 'Value', 'Updated'] },
+  Parts: { cols: ['id', 'name', 'step', 'qty', 'status', 'partNo', 'price', 'link', 'photo', 'notes', 'updated'], headers: ['ID', 'Part', 'Step', 'Qty', 'Status', 'Part #', 'Price each', 'Link', 'Photo ID', 'Notes', 'Updated'] },
 };
 
 function doGet(e) {
@@ -43,13 +44,18 @@ function doPost(e) {
   try {
     switch (req.action) {
       case 'list':
-        return json_({ ok: true, steps: readAll_('Steps'), photos: readAll_('Photos').map(photoOut_), frame: readAll_('Frame'), settings: readAll_('Settings'), askEnabled: !!apiKey_(), guides: listGuides_() });
+        return json_({ ok: true, steps: readAll_('Steps'), photos: readAll_('Photos').map(photoOut_), frame: readAll_('Frame'), settings: readAll_('Settings'), askEnabled: !!apiKey_(), guides: listGuides_(), parts: readAll_('Parts').map(partOut_) });
       case 'guide_list':
         return json_({ ok: true, guides: listGuides_() });
       case 'guide_get':
         return json_({ ok: true, guide: getGuide_(req.code) });
       case 'guide_put':
         return json_({ ok: true, guide: withLock_(() => putGuide_(req.code, req.data)) });
+      case 'part':
+        return json_({ ok: true, part: partOut_(withLock_(() => upsert_('Parts', 'id', partIn_(req.part)))) });
+      case 'part_delete':
+        withLock_(() => deleteRow_('Parts', req.id));
+        return json_({ ok: true });
       case 'step':
         return json_({ ok: true, step: withLock_(() => upsert_('Steps', 'code', stepIn_(req.step))) });
       case 'frame':
@@ -121,6 +127,30 @@ function upsert_(tab, keyCol, obj) {
 function stepIn_(s) {
   if (!s || !s.code) throw new Error('step needs code');
   return { code: String(s.code), done: s.done ? 'TRUE' : 'FALSE', notes: String(s.notes || ''), bag: String(s.bag || '') };
+}
+
+/* ---------- Parts list ---------- */
+
+const PART_STATUS = ['need', 'ordered', 'have'];
+
+function partIn_(p) {
+  if (!p || !p.id || !String(p.name || '').trim()) throw new Error('part needs id and name');
+  return {
+    id: String(p.id), name: String(p.name).trim().slice(0, 200), step: String(p.step || ''),
+    qty: String(Math.max(1, Math.round(Number(p.qty) || 1))), status: PART_STATUS.indexOf(p.status) >= 0 ? p.status : 'need',
+    partNo: String(p.partNo || '').slice(0, 100), price: p.price === '' || p.price == null ? '' : String(Number(p.price) || 0),
+    link: /^https?:\/\//.test(String(p.link || '')) ? String(p.link) : '', photo: String(p.photo || ''), notes: String(p.notes || '').slice(0, 2000),
+  };
+}
+
+function partOut_(p) {
+  return { id: p.id, name: p.name, step: p.step, qty: Number(p.qty) || 1, status: p.status || 'need', partNo: p.partNo, price: p.price === '' ? '' : Number(p.price), link: p.link, photo: p.photo, notes: p.notes, updated: p.updated };
+}
+
+function deleteRow_(tab, id) {
+  const sh = sheet_(tab);
+  const row = findRow_(sh, id);
+  if (row > 0) sh.deleteRow(row);
 }
 
 /* ---------- Photos (Drive) ---------- */

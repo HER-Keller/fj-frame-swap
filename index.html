@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=7" />
+  <link rel="stylesheet" href="styles.css?v=8" />
 </head>
 <body>
   <header class="top">
@@ -47,6 +47,18 @@
       </div>
       <div class="filters" id="filters"></div>
       <div class="gallery" id="gallery"></div>
+    </section>
+
+    <!-- Parts to buy -->
+    <section id="v-parts" data-view="parts" hidden>
+      <p class="blurb">Anything too rusty or worn to go back on. Tap the status to move a part from Need to Ordered to Have; tap the part to edit it.</p>
+      <div class="psum" id="partSum"></div>
+      <div class="row-btns" style="margin-bottom:12px">
+        <button type="button" class="primary" id="partAdd" style="flex:1">＋ Add a part</button>
+        <button type="button" id="partCopy" style="flex:1">Share shopping list</button>
+      </div>
+      <div class="filters" id="partFilters"></div>
+      <div id="partList"></div>
     </section>
 
     <!-- Frame check -->
@@ -133,6 +145,7 @@
         <p class="muted small" id="appVersion" style="margin:0"></p>
       </div>
       <div class="more-nav" style="margin-top:12px">
+        <button type="button" data-go="frame">Frame check <span aria-hidden="true">›</span></button>
         <button type="button" data-jump="organize">Keeping it organized <span aria-hidden="true">›</span></button>
         <button type="button" data-jump="tools">Tool list <span aria-hidden="true">›</span></button>
         <button type="button" data-jump="manuals">Where things are in your manuals <span aria-hidden="true">›</span></button>
@@ -197,7 +210,7 @@
   <nav class="tabbar" aria-label="Sections">
     <button type="button" data-tab="checklist" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/></svg>Checklist</button>
     <button type="button" data-tab="photos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Photos</button>
-    <button type="button" data-tab="frame"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v18M17 3v18M7 8h10M7 16h10"/></svg>Frame</button>
+    <button type="button" data-tab="parts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="m3 7.5 9 4.5 9-4.5M12 12v9"/></svg>Parts<span class="tbadge" id="partsBadge" hidden></span></button>
     <button type="button" data-tab="specs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>Torque</button>
     <button type="button" data-tab="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</button>
   </nav>
@@ -232,6 +245,7 @@
         </div>
         <p class="muted small" id="vAskOff" hidden>To ask Claude about photos, add an ANTHROPIC_API_KEY script property in the Google Sheet's Apps Script (see the README).</p>
         <div id="vHist"></div>
+        <button type="button" id="vPart" class="block">＋ Add to parts list</button>
         <div class="row-btns">
           <button type="button" id="vGoStep">Go to step</button>
           <button type="button" class="danger" id="vDel">Delete photo</button>
@@ -267,10 +281,30 @@
     </form>
   </dialog>
 
+  <!-- Add / edit a part -->
+  <dialog id="partDlg" class="sheet">
+    <form id="partForm" novalidate>
+      <h2 id="partH" tabindex="-1">Add a part</h2>
+      <div class="pphoto" id="partPhoto" hidden><img alt="Photo this part was added from"><span class="muted small">Added from your photo</span></div>
+      <label class="fl">Part<input name="name" type="text" placeholder="e.g. Rear LH lower control arm" autocomplete="off" enterkeyhint="next"></label>
+      <div class="row2">
+        <label class="fl">Qty<input name="qty" type="number" min="1" step="1" inputmode="numeric"></label>
+        <label class="fl">Price each ($)<input name="price" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+      </div>
+      <div class="fl"><span>Status</span><div class="seg" id="partStatus" role="group" aria-label="Status"><button type="button" data-st="need">Need</button><button type="button" data-st="ordered">Ordered</button><button type="button" data-st="have">Have</button></div></div>
+      <label class="fl">For step<select name="step"></select></label>
+      <label class="fl">Part number<input name="partNo" type="text" autocomplete="off" placeholder="Toyota or aftermarket number"></label>
+      <label class="fl">Link<input name="link" type="url" inputmode="url" autocomplete="off" placeholder="https://"></label>
+      <label class="fl">Notes<textarea name="notes" rows="2" placeholder="Why it's being replaced, where you're buying it"></textarea></label>
+      <p class="err" id="partErr" hidden></p>
+      <div class="row-btns"><button type="button" class="danger" id="partDel" hidden>Delete</button><span style="flex:1"></span><button type="button" id="partCancel">Cancel</button><button class="primary">Save</button></div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" role="status"></div>
 
-  <script src="config.js?v=7"></script>
-  <script src="data.js?v=7"></script>
-  <script src="app.js?v=7"></script>
+  <script src="config.js?v=8"></script>
+  <script src="data.js?v=8"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>
